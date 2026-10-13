@@ -120,6 +120,10 @@ async fn handle_connection(
         return write_json(&mut stream, 200, r#"{"ok":true}"#).await;
     }
 
+    if request.method == "OPTIONS" {
+        return write_preflight(&mut stream).await;
+    }
+
     let expected = format!("Bearer {token}");
     if request.headers.get("authorization") != Some(&expected) {
         return write_json(&mut stream, 401, r#"{"error":"unauthorized"}"#).await;
@@ -430,11 +434,27 @@ async fn write_json(stream: &mut TcpStream, status: u16, body: &str) -> Result<(
         _ => "Error",
     };
     let response = format!(
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
         body.len()
     );
     stream
         .write_all(response.as_bytes())
         .await
         .map_err(|error| format!("Failed to write response: {error}"))
+}
+
+async fn write_preflight(stream: &mut TcpStream) -> Result<(), String> {
+    let response = concat!(
+        "HTTP/1.1 204 No Content\r\n",
+        "Access-Control-Allow-Origin: *\r\n",
+        "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n",
+        "Access-Control-Allow-Headers: Authorization, Content-Type\r\n",
+        "Access-Control-Max-Age: 86400\r\n",
+        "Content-Length: 0\r\n",
+        "Connection: close\r\n\r\n"
+    );
+    stream
+        .write_all(response.as_bytes())
+        .await
+        .map_err(|error| format!("Failed to write preflight response: {error}"))
 }
