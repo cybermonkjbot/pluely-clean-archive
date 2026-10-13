@@ -77,6 +77,9 @@ fn to_interview_context(event: CalendarEvent) -> Option<InterviewContext> {
         return None;
     }
 
+    let interviewing_as = metadata_value(&metadata, &["as", "interviewing as", "role"])
+        .or_else(|| role_from_title(&event.title));
+
     Some(InterviewContext {
         event_id: event.id,
         title: event.title,
@@ -84,8 +87,7 @@ fn to_interview_context(event: CalendarEvent) -> Option<InterviewContext> {
         ends_at: event.ends_at,
         location: optional_text(event.location),
         attendees: event.attendees,
-        interviewing_as: metadata_value(&metadata, &["as", "interviewing as", "role"])
-            .or_else(|| role_from_title(&event.title)),
+        interviewing_as,
         target_time_zone: metadata_value(&metadata, &["timezone", "time zone", "target timezone"]),
         resume_version: metadata_value(&metadata, &["resume", "resume version", "cv"]),
     })
