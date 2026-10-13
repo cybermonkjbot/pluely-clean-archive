@@ -96,6 +96,7 @@ process.stdout.write(`${responseBody}\n`);
 
 function createCodexProviderCommand() {
   const config = readCodexProviderConfig();
+  const model = process.env.PLUELY_CODEX_MODEL || "gpt-6.1-sol";
   const endpoint = `${config.baseUrl.replace(/\/$/, "")}/chat/completions`;
 
   return {
@@ -113,13 +114,14 @@ function createCodexProviderCommand() {
             { role: "system", content: "{{SYSTEM_PROMPT}}" },
             { role: "user", content: "{{TEXT}}" },
           ],
+          reasoning_effort: "low",
           stream: false,
         })}'`,
       ].join(" \\\n  "),
       streaming: false,
       responseContentPath: "choices[0].message.content",
     },
-    variables: { api_key: config.apiKey, model: config.model },
+    variables: { api_key: config.apiKey, model },
     select: true,
   };
 }
