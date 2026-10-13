@@ -5,6 +5,7 @@ export * from "./curl-validator";
 export * from "./platform-instructions";
 export * from "./database";
 export * from "./chat-constants";
+export * from "./control";
 export * from "./platform";
 export * from "./analytics";
 export * from "./response-settings.constants";

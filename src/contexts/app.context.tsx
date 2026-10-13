@@ -4,7 +4,12 @@ import {
   SPEECH_TO_TEXT_PROVIDERS,
   STORAGE_KEYS,
 } from "@/config";
-import { getPlatform, safeLocalStorage, trackAppStart } from "@/lib";
+import {
+  applyControlCommand,
+  type ControlCommand,
+  getPlatform,
+  safeLocalStorage,
+} from "@/lib";
 import { getShortcutsConfig } from "@/lib/storage";
 import {
   getCustomizableState,
@@ -131,7 +136,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [customizable, setCustomizable] = useState<CustomizableState>(
     DEFAULT_CUSTOMIZABLE_STATE
   );
-  const [hasActiveLicense, setHasActiveLicense] = useState<boolean>(false);
+  const [hasActiveLicense, setHasActiveLicense] = useState<boolean>(true);
   const [supportsImages, setSupportsImagesState] = useState<boolean>(() => {
     const stored = safeLocalStorage.getItem(STORAGE_KEYS.SUPPORTS_IMAGES);
     return stored === null ? true : stored === "true";
@@ -144,22 +149,16 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Pluely API State
-  const [pluelyApiEnabled, setPluelyApiEnabledState] = useState<boolean>(
-    safeLocalStorage.getItem(STORAGE_KEYS.PLUELY_API_ENABLED) === "true"
-  );
+  const [pluelyApiEnabled, setPluelyApiEnabledState] = useState<boolean>(false);
 
   const getActiveLicenseStatus = async () => {
-    const response: { is_active: boolean; is_dev_license: boolean } =
-      await invoke("validate_license_api");
-    setHasActiveLicense(response.is_active);
-
-    if (response?.is_dev_license) {
-      setPluelyApiEnabled(false);
-    }
+    setHasActiveLicense(true);
+    setPluelyApiEnabledState(false);
+    safeLocalStorage.setItem(STORAGE_KEYS.PLUELY_API_ENABLED, "false");
 
     // Check if the auto configs are enabled
     const autoConfigsEnabled = localStorage.getItem("auto-configs-enabled");
-    if (response.is_active && !autoConfigsEnabled) {
+    if (!autoConfigsEnabled) {
       setScreenshotConfiguration({
         mode: "auto",
         autoPrompt: "Analyze the screenshot and provide insights",
@@ -331,17 +330,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const initializeApp = async () => {
       // Load license and data
       await getActiveLicenseStatus();
-
-      // Track app start
-      try {
-        const appVersion = await invoke<string>("get_app_version");
-        const storage = await invoke<{
-          instance_id: string;
-        }>("secure_storage_get");
-        await trackAppStart(appVersion, storage.instance_id || "");
-      } catch (error) {
-        console.debug("Failed to track app start:", error);
-      }
     };
     // Load data
     loadData();
@@ -448,6 +436,20 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     };
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen<ControlCommand>(
+      "pluely-control-command",
+      (event) => {
+        applyControlCommand(event.payload);
+        loadData();
+      }
+    );
+
+    return () => {
+      unlisten.then((stop) => stop());
+    };
   }, []);
 
   // Check if the current AI provider/model supports images

@@ -1,8 +1,8 @@
 {
-  "name": "pluely",
+  "name": "pluely-clean",
   "private": false,
-  "version": "0.1.9",
-  "description": "The Open Source Alternative to Cluely - A lightning-fast, privacy-first AI assistant that works seamlessly during meetings, interviews, and conversations without anyone knowing.",
+  "version": "0.1.9-clean.1",
+  "description": "A distraction-free local fork of Pluely v0.1.9.",
   "author": {
     "name": "Srikanth Nani",
     "email": "srikanthnani1202@gmail.com",
@@ -38,7 +38,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "control": "node scripts/pluely-control.mjs"
   },
   "dependencies": {
     "@bany/curl-to-json": "^1.2.8",

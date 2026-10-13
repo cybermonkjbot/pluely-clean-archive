@@ -4123,8 +4123,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "pluely"
-version = "0.1.9"
+name = "pluely-clean"
+version = "0.1.9-clean.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

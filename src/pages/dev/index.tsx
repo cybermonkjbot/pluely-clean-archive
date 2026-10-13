@@ -1,5 +1,4 @@
 import { AIProviders, STTProviders } from "./components";
-import Contribute from "@/components/Contribute";
 import { useSettings } from "@/hooks";
 import { PageLayout } from "@/layouts";
 
@@ -7,8 +6,10 @@ const DevSpace = () => {
   const settings = useSettings();
 
   return (
-    <PageLayout title="Dev Space" description="Manage your dev space">
-      <Contribute />
+    <PageLayout
+      title="Providers"
+      description="Configure the AI and speech providers used by this device"
+    >
       {/* Provider Selection */}
       <AIProviders {...settings} />
 

@@ -1,17 +1,9 @@
-import {
-  Theme,
-  AlwaysOnTopToggle,
-  AppIconToggle,
-  AutostartToggle,
-} from "./components";
+import { AlwaysOnTopToggle, AppIconToggle, AutostartToggle } from "./components";
 import { PageLayout } from "@/layouts";
 
 const Settings = () => {
   return (
     <PageLayout title="Settings" description="Manage your settings">
-      {/* Theme */}
-      <Theme />
-
       {/* Autostart Toggle */}
       <AutostartToggle />
 
