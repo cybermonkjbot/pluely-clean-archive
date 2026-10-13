@@ -1,7 +1,6 @@
 import {
   Settings,
   MessagesSquare,
-  WandSparkles,
   AudioLinesIcon,
   SquareSlashIcon,
   MonitorIcon,
@@ -28,11 +27,6 @@ export const useMenuItems = () => {
       icon: MessagesSquare,
       label: "Chats",
       href: "/chats",
-    },
-    {
-      icon: WandSparkles,
-      label: "System prompts",
-      href: "/system-prompts",
     },
     {
       icon: Settings,
