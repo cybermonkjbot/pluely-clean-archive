@@ -18,6 +18,8 @@ The bundled CLI reads the token without printing it:
 npm run control -- health
 npm run control -- import-codex
 npm run control -- use-codex
+npm run control -- use-codex-speech
+npm run control -- use-local-speech
 npm run control -- dashboard
 npm run control -- show
 npm run control -- hide
@@ -32,6 +34,14 @@ local storage.
 `use-codex` selects a local provider that runs each response through
 `codex exec` with an ephemeral, read-only session. It defaults to
 `gpt-6.1-sol`; set `PLUELY_CODEX_MODEL` to override it.
+
+`use-codex-speech` selects the transcription endpoint from the same Codex
+provider configuration and reuses its credential. It defaults to
+`gpt-transcribe`; set `PLUELY_CODEX_SPEECH_MODEL` to override it.
+
+`use-local-speech` selects the loopback-only local Whisper service bundled
+with this installation. Audio remains on the Mac and no speech API key is
+required.
 
 ## macOS Calendar interview context
 

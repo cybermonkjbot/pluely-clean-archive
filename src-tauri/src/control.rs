@@ -8,7 +8,7 @@ use tokio::process::Command;
 use uuid::Uuid;
 
 const CONTROL_ADDRESS: &str = "127.0.0.1:37421";
-const MAX_REQUEST_BYTES: usize = 1_048_576;
+const MAX_REQUEST_BYTES: usize = 20 * 1_048_576;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -125,6 +125,10 @@ async fn handle_connection(
         return write_json(&mut stream, 401, r#"{"error":"unauthorized"}"#).await;
     }
 
+    if request.method == "POST" && request.path == "/v1/speech/transcriptions" {
+        return handle_local_transcription(&mut stream, &app, &request.body).await;
+    }
+
     if request.method == "POST" && request.path == "/v1/codex/chat/completions" {
         return handle_codex_chat(&mut stream, &app, &request.body).await;
     }
@@ -137,6 +141,68 @@ async fn handle_connection(
         .map_err(|error| format!("Invalid control command: {error}"))?;
     apply_command(&app, &command)?;
     write_json(&mut stream, 202, r#"{"accepted":true}"#).await
+}
+
+async fn handle_local_transcription(
+    stream: &mut TcpStream,
+    app: &AppHandle,
+    audio: &[u8],
+) -> Result<(), String> {
+    if audio.is_empty() {
+        return write_json(stream, 400, r#"{"error":"empty_audio"}"#).await;
+    }
+
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Failed to resolve app data directory: {error}"))?;
+    let speech_dir = app_data.join("speech");
+    let binary = speech_dir.join("whisper-cli");
+    let model = speech_dir.join("ggml-base.en.bin");
+    if !binary.is_file() || !model.is_file() {
+        return write_json(stream, 503, r#"{"error":"local_speech_not_installed"}"#).await;
+    }
+
+    let request_id = Uuid::new_v4().simple().to_string();
+    let input = speech_dir.join(format!("{request_id}.wav"));
+    let output_prefix = speech_dir.join(&request_id);
+    let output_text = speech_dir.join(format!("{request_id}.txt"));
+    fs::write(&input, audio).map_err(|error| format!("Failed to stage audio: {error}"))?;
+
+    let result = tokio::time::timeout(
+        Duration::from_secs(120),
+        Command::new(&binary)
+            .env("DYLD_LIBRARY_PATH", &speech_dir)
+            .arg("-m")
+            .arg(&model)
+            .arg("-f")
+            .arg(&input)
+            .arg("-otxt")
+            .arg("-of")
+            .arg(&output_prefix)
+            .arg("-np")
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .output(),
+    )
+    .await;
+
+    let response = match result {
+        Err(_) => serde_json::json!({ "error": "transcription_timeout" }),
+        Ok(Err(error)) => serde_json::json!({ "error": format!("Failed to start local speech: {error}") }),
+        Ok(Ok(output)) if !output.status.success() => serde_json::json!({
+            "error": String::from_utf8_lossy(&output.stderr).trim()
+        }),
+        Ok(Ok(_)) => match fs::read_to_string(&output_text) {
+            Ok(text) => serde_json::json!({ "text": text.trim() }),
+            Err(error) => serde_json::json!({ "error": format!("Failed to read transcript: {error}") }),
+        },
+    };
+
+    let _ = fs::remove_file(input);
+    let _ = fs::remove_file(output_text);
+    let status = if response.get("text").is_some() { 200 } else { 502 };
+    write_json(stream, status, &response.to_string()).await
 }
 
 #[derive(Deserialize)]
@@ -357,8 +423,10 @@ async fn write_json(stream: &mut TcpStream, status: u16, body: &str) -> Result<(
         200 => "OK",
         202 => "Accepted",
         401 => "Unauthorized",
+        400 => "Bad Request",
         404 => "Not Found",
         502 => "Bad Gateway",
+        503 => "Service Unavailable",
         _ => "Error",
     };
     let response = format!(
