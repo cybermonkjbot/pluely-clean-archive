@@ -4,6 +4,7 @@ mod api;
 mod capture;
 mod control;
 mod db;
+mod interview;
 mod shortcuts;
 mod window;
 use std::sync::{Arc, Mutex};
@@ -57,6 +58,7 @@ pub fn run() {
     let mut builder = builder
         .invoke_handler(tauri::generate_handler![
             get_app_version,
+            interview::get_calendar_interview_context,
             window::set_window_height,
             window::open_dashboard,
             window::toggle_dashboard,

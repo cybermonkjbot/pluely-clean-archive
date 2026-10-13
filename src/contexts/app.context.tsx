@@ -6,8 +6,10 @@ import {
 } from "@/config";
 import {
   applyControlCommand,
+  composeInterviewSystemPrompt,
   type ControlCommand,
   getPlatform,
+  type InterviewContext,
   safeLocalStorage,
 } from "@/lib";
 import { getShortcutsConfig } from "@/lib/storage";
@@ -29,7 +31,9 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { enable, disable } from "@tauri-apps/plugin-autostart";
 import {
+  type Dispatch,
   ReactNode,
+  type SetStateAction,
   createContext,
   useContext,
   useEffect,
@@ -73,12 +77,35 @@ const validateAndProcessCurlProviders = (
 // Create the context
 const AppContext = createContext<IContextType | undefined>(undefined);
 
+const readInterviewContext = (): InterviewContext | null => {
+  try {
+    return JSON.parse(
+      safeLocalStorage.getItem(STORAGE_KEYS.INTERVIEW_CONTEXT) || "null"
+    );
+  } catch {
+    return null;
+  }
+};
+
 // Create the provider component
 export const AppProvider = ({ children }: { children: ReactNode }) => {
-  const [systemPrompt, setSystemPrompt] = useState<string>(
-    safeLocalStorage.getItem(STORAGE_KEYS.SYSTEM_PROMPT) ||
-      DEFAULT_SYSTEM_PROMPT
+  const [systemPrompt, setComposedSystemPrompt] = useState<string>(() =>
+    composeInterviewSystemPrompt(
+      safeLocalStorage.getItem(STORAGE_KEYS.SYSTEM_PROMPT) ||
+        DEFAULT_SYSTEM_PROMPT,
+      readInterviewContext()
+    )
   );
+  const setSystemPrompt: Dispatch<SetStateAction<string>> = (value) => {
+    const currentBasePrompt =
+      safeLocalStorage.getItem(STORAGE_KEYS.SYSTEM_PROMPT) ||
+      DEFAULT_SYSTEM_PROMPT;
+    const nextBasePrompt =
+      typeof value === "function" ? value(currentBasePrompt) : value;
+    setComposedSystemPrompt(
+      composeInterviewSystemPrompt(nextBasePrompt, readInterviewContext())
+    );
+  };
 
   const [selectedAudioDevices, setSelectedAudioDevices] = useState<{
     input: { id: string; name: string };
@@ -193,7 +220,19 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       STORAGE_KEYS.SYSTEM_PROMPT
     );
     if (savedSystemPrompt) {
-      setSystemPrompt(savedSystemPrompt || DEFAULT_SYSTEM_PROMPT);
+      setComposedSystemPrompt(
+        composeInterviewSystemPrompt(
+          savedSystemPrompt || DEFAULT_SYSTEM_PROMPT,
+          readInterviewContext()
+        )
+      );
+    } else {
+      setComposedSystemPrompt(
+        composeInterviewSystemPrompt(
+          DEFAULT_SYSTEM_PROMPT,
+          readInterviewContext()
+        )
+      );
     }
 
     // Load screenshot configuration
@@ -427,6 +466,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         e.key === STORAGE_KEYS.CUSTOM_SPEECH_PROVIDERS ||
         e.key === STORAGE_KEYS.SELECTED_STT_PROVIDER ||
         e.key === STORAGE_KEYS.SYSTEM_PROMPT ||
+        e.key === STORAGE_KEYS.INTERVIEW_CONTEXT ||
         e.key === STORAGE_KEYS.SCREENSHOT_CONFIG ||
         e.key === STORAGE_KEYS.CUSTOMIZABLE ||
         e.key === STORAGE_KEYS.SELECTED_AUDIO_DEVICES
@@ -436,6 +476,33 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     };
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
+  useEffect(() => {
+    if (getCurrentWindow().label !== "main") return;
+
+    const refreshCalendarContext = async () => {
+      try {
+        const context = await invoke<InterviewContext | null>(
+          "get_calendar_interview_context"
+        );
+        if (context) {
+          safeLocalStorage.setItem(
+            STORAGE_KEYS.INTERVIEW_CONTEXT,
+            JSON.stringify(context)
+          );
+        } else {
+          safeLocalStorage.removeItem(STORAGE_KEYS.INTERVIEW_CONTEXT);
+        }
+        loadData();
+      } catch (error) {
+        console.debug("Calendar interview context is unavailable", error);
+      }
+    };
+
+    refreshCalendarContext();
+    const interval = window.setInterval(refreshCalendarContext, 60_000);
+    return () => window.clearInterval(interval);
   }, []);
 
   useEffect(() => {

@@ -1,6 +1,7 @@
 import { STORAGE_KEYS } from "@/config";
 import { safeLocalStorage } from "@/lib/storage";
 import type { TYPE_PROVIDER } from "@/types";
+import type { InterviewContext } from "./interview-context";
 
 type ProviderCommand = {
   provider: TYPE_PROVIDER & { id: string };
@@ -12,6 +13,7 @@ export type ControlCommand =
   | ({ type: "configure_ai_provider" } & ProviderCommand)
   | ({ type: "configure_stt_provider" } & ProviderCommand)
   | { type: "set_system_prompt"; prompt: string }
+  | { type: "set_interview_context"; context: InterviewContext | null }
   | { type: "reload_settings" };
 
 export function applyControlCommand(command: ControlCommand): void {
@@ -32,6 +34,16 @@ export function applyControlCommand(command: ControlCommand): void {
       return;
     case "set_system_prompt":
       safeLocalStorage.setItem(STORAGE_KEYS.SYSTEM_PROMPT, command.prompt);
+      return;
+    case "set_interview_context":
+      if (command.context) {
+        safeLocalStorage.setItem(
+          STORAGE_KEYS.INTERVIEW_CONTEXT,
+          JSON.stringify(command.context)
+        );
+      } else {
+        safeLocalStorage.removeItem(STORAGE_KEYS.INTERVIEW_CONTEXT);
+      }
       return;
     case "reload_settings":
       return;

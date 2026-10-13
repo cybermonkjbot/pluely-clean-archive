@@ -9,6 +9,11 @@ upgrade, subscription, usage-meter and promotional surfaces. The official
 hosted API is disabled; the app uses providers configured by the person running
 it.
 
+On macOS, the app can read upcoming interview events from Calendar and append
+the relevant persona, target time zone, résumé version, schedule and
+participants to the active system prompt. It can also use the installed Codex
+CLI as a local response harness.
+
 The app has its own product name, bundle identifier and data directory, so it
 can be installed beside an official Pluely release without sharing state.
 

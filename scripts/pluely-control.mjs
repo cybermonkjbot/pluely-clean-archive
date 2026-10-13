@@ -8,7 +8,7 @@ const address = process.env.PLUELY_CLEAN_CONTROL_URL || "http://127.0.0.1:37421"
 const command = process.argv[2];
 
 if (!command) {
-  fail("Usage: npm run control -- <health|show|hide|toggle|dashboard|prompt|send|import-codex>");
+  fail("Usage: npm run control -- <health|show|hide|toggle|dashboard|prompt|send|import-codex|use-codex>");
 }
 
 if (command === "health") {
@@ -43,8 +43,37 @@ switch (command) {
   case "import-codex":
     payload = createCodexProviderCommand();
     break;
+  case "use-codex":
+    payload = createCodexHarnessCommand(token);
+    break;
   default:
     fail(`Unknown control command: ${command}`);
+}
+
+function createCodexHarnessCommand(token) {
+  const model = process.env.PLUELY_CODEX_MODEL || "gpt-6.1-sol";
+  return {
+    type: "configure_ai_provider",
+    provider: {
+      id: "codex-local-harness",
+      curl: [
+        `curl ${address}/v1/codex/chat/completions`,
+        '-H "Content-Type: application/json"',
+        '-H "Authorization: Bearer {{API_KEY}}"',
+        `-d '${JSON.stringify({
+          model: "{{MODEL}}",
+          messages: [
+            { role: "system", content: "{{SYSTEM_PROMPT}}" },
+            { role: "user", content: "{{TEXT}}" },
+          ],
+        })}'`,
+      ].join(" \\\n+  "),
+      streaming: false,
+      responseContentPath: "choices[0].message.content",
+    },
+    variables: { api_key: token, model },
+    select: true,
+  };
 }
 
 const response = await fetch(`${address}/v1/commands`, {

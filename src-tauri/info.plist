@@ -14,6 +14,12 @@
   <key>NSAudioCaptureUsageDescription</key>
   <string>Pluely needs access to system audio to process transcription and AI responses.</string>
 
+  <!-- Calendar context -->
+  <key>NSCalendarsUsageDescription</key>
+  <string>Pluely Clean reads upcoming interview events to prepare the correct interview context.</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Pluely Clean reads interview details from macOS Calendar.</string>
+
   <!-- Privacy - Audio Processing -->
   <key>NSPrivacyAccessedAPITypes</key>
   <array>

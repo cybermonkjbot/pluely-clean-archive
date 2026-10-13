@@ -17,6 +17,7 @@ The bundled CLI reads the token without printing it:
 ```bash
 npm run control -- health
 npm run control -- import-codex
+npm run control -- use-codex
 npm run control -- dashboard
 npm run control -- show
 npm run control -- hide
@@ -27,6 +28,30 @@ npm run control -- prompt "Answer directly and keep responses concise."
 uses its `base_url`, `env_key` and model, and sends the configuration to the
 running app. The credential remains in the local request and Pluely Clean's
 local storage.
+
+`use-codex` selects a local provider that runs each response through
+`codex exec` with an ephemeral, read-only session. It defaults to
+`gpt-6.1-sol`; set `PLUELY_CODEX_MODEL` to override it.
+
+## macOS Calendar interview context
+
+The app checks macOS Calendar once a minute for an interview that is currently
+running or starts within 24 hours. An event is treated as an interview when its
+title or calendar name contains `interview`, `recruiter screen`,
+`technical screen` or `hiring manager`, or its notes contain interview
+metadata.
+
+For reliable context, add this compact block to the Calendar event notes:
+
+```text
+[interview]
+as: Senior Product Engineer
+timezone: America/New_York
+resume: US product engineer v3
+```
+
+The fields are optional. The app appends available values, event time and
+participants to the active system prompt without overwriting the base prompt.
 
 Codex can also send a raw command:
 
@@ -39,6 +64,7 @@ Supported command types are:
 - `configure_ai_provider`
 - `configure_stt_provider`
 - `set_system_prompt`
+- `set_interview_context`
 - `reload_settings`
 - `open_dashboard`
 - `show_overlay`
