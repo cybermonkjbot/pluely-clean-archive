@@ -16,7 +16,7 @@ fn get_app_endpoint() -> Result<String, String> {
 
     match option_env!("APP_ENDPOINT") {
         Some(endpoint) => Ok(endpoint.to_string()),
-        None => Err("APP_ENDPOINT environment variable not set. Please ensure it's set during the build process.".to_string())
+        None => Err("Hosted Pluely services are disabled in Pluely Clean. Use a configured local or custom provider.".to_string())
     }
 }
 
@@ -27,7 +27,7 @@ fn get_api_access_key() -> Result<String, String> {
 
     match option_env!("API_ACCESS_KEY") {
         Some(key) => Ok(key.to_string()),
-        None => Err("API_ACCESS_KEY environment variable not set. Please ensure it's set during the build process.".to_string())
+        None => Err("Hosted Pluely services are disabled in Pluely Clean. Use a configured local or custom provider.".to_string())
     }
 }
 

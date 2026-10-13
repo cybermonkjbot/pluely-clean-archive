@@ -314,13 +314,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       }
     }
 
-    // Load Pluely API enabled state
-    const savedPluelyApiEnabled = safeLocalStorage.getItem(
-      STORAGE_KEYS.PLUELY_API_ENABLED
-    );
-    if (savedPluelyApiEnabled !== null) {
-      setPluelyApiEnabledState(savedPluelyApiEnabled === "true");
-    }
+    // Pluely Clean uses only local and user-configured providers.
+    setPluelyApiEnabledState(false);
+    safeLocalStorage.setItem(STORAGE_KEYS.PLUELY_API_ENABLED, "false");
 
     // Load selected audio devices
     const savedAudioDevices = safeLocalStorage.getItem(
@@ -683,9 +679,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     loadData();
   };
 
-  const setPluelyApiEnabled = async (enabled: boolean) => {
-    setPluelyApiEnabledState(enabled);
-    safeLocalStorage.setItem(STORAGE_KEYS.PLUELY_API_ENABLED, String(enabled));
+  const setPluelyApiEnabled = async (_enabled: boolean) => {
+    const enabled = false;
+    setPluelyApiEnabledState(false);
+    safeLocalStorage.setItem(STORAGE_KEYS.PLUELY_API_ENABLED, "false");
 
     if (enabled) {
       try {
