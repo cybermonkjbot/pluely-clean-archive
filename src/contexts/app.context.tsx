@@ -89,6 +89,9 @@ const readInterviewContext = (): InterviewContext | null => {
 
 // Create the provider component
 export const AppProvider = ({ children }: { children: ReactNode }) => {
+  const [interviewContext, setInterviewContext] = useState<InterviewContext | null>(
+    readInterviewContext
+  );
   const [systemPrompt, setComposedSystemPrompt] = useState<string>(() =>
     composeInterviewSystemPrompt(
       safeLocalStorage.getItem(STORAGE_KEYS.SYSTEM_PROMPT) ||
@@ -215,6 +218,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   // Function to load AI, STT, system prompt and screenshot config data from storage
   const loadData = () => {
+    const nextInterviewContext = readInterviewContext();
+    setInterviewContext(nextInterviewContext);
+
     // Load system prompt
     const savedSystemPrompt = safeLocalStorage.getItem(
       STORAGE_KEYS.SYSTEM_PROMPT
@@ -223,14 +229,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       setComposedSystemPrompt(
         composeInterviewSystemPrompt(
           savedSystemPrompt || DEFAULT_SYSTEM_PROMPT,
-          readInterviewContext()
+          nextInterviewContext
         )
       );
     } else {
       setComposedSystemPrompt(
         composeInterviewSystemPrompt(
           DEFAULT_SYSTEM_PROMPT,
-          readInterviewContext()
+          nextInterviewContext
         )
       );
     }
@@ -722,6 +728,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const value: IContextType = {
     systemPrompt,
     setSystemPrompt,
+    interviewContext,
     allAiProviders,
     customAiProviders,
     selectedAIProvider,

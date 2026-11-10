@@ -8,7 +8,7 @@ const address = process.env.PLUELY_CLEAN_CONTROL_URL || "http://127.0.0.1:37421"
 const command = process.argv[2];
 
 if (!command) {
-  fail("Usage: npm run control -- <health|show|hide|toggle|dashboard|prompt|send|import-codex|use-codex|use-codex-speech|use-local-speech>");
+  fail("Usage: npm run control -- <health|interview|show|hide|toggle|dashboard|prompt|send|import-codex|use-codex|use-codex-speech|use-local-speech>");
 }
 
 if (command === "health") {
@@ -18,6 +18,15 @@ if (command === "health") {
 }
 
 const token = fs.readFileSync(resolveTokenPath(), "utf8").trim();
+
+if (command === "interview") {
+  const response = await fetch(`${address}/v1/interview-context`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  process.stdout.write(`${await response.text()}\n`);
+  process.exit(response.ok ? 0 : 1);
+}
+
 let payload;
 
 switch (command) {

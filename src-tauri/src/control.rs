@@ -137,6 +137,13 @@ async fn handle_connection(
         return handle_codex_chat(&mut stream, &app, &request.body).await;
     }
 
+    if request.method == "GET" && request.path == "/v1/interview-context" {
+        let context = crate::interview::get_calendar_interview_context().await?;
+        let body = serde_json::to_string(&context)
+            .map_err(|error| format!("Failed to serialize interview context: {error}"))?;
+        return write_json(&mut stream, 200, &body).await;
+    }
+
     if request.method != "POST" || request.path != "/v1/commands" {
         return write_json(&mut stream, 404, r#"{"error":"not_found"}"#).await;
     }

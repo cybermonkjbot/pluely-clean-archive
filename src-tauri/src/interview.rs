@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::{fs, path::{Path, PathBuf}, time::Duration};
 use tokio::process::Command;
 
 const FIELD_SEPARATOR: char = '\u{001f}';
@@ -17,6 +17,14 @@ pub struct InterviewContext {
     pub interviewing_as: Option<String>,
     pub target_time_zone: Option<String>,
     pub resume_version: Option<String>,
+    #[serde(default)]
+    pub resume_path: Option<String>,
+    #[serde(default = "default_resume_match")]
+    pub resume_match: String,
+}
+
+fn default_resume_match() -> String {
+    "unspecified".to_string()
 }
 
 #[derive(Debug)]
@@ -78,7 +86,22 @@ fn to_interview_context(event: CalendarEvent) -> Option<InterviewContext> {
     }
 
     let interviewing_as = metadata_value(&metadata, &["as", "interviewing as", "role"])
+        .or_else(|| {
+            metadata_value(&metadata, &["jd", "job description"])
+                .and_then(|value| role_from_job_url(&value))
+        })
         .or_else(|| role_from_title(&event.title));
+
+    let resume_version = metadata_value(&metadata, &["resume", "resume version", "cv"]);
+    let (resume_path, resume_match) = match_resume(
+        resume_version.as_deref(),
+        interviewing_as.as_deref(),
+    );
+    let attendees = if event.attendees.is_empty() {
+        attendees_from_title(&event.title)
+    } else {
+        event.attendees
+    };
 
     Some(InterviewContext {
         event_id: event.id,
@@ -86,11 +109,135 @@ fn to_interview_context(event: CalendarEvent) -> Option<InterviewContext> {
         starts_at: event.starts_at,
         ends_at: event.ends_at,
         location: optional_text(event.location),
-        attendees: event.attendees,
+        attendees,
         interviewing_as,
         target_time_zone: metadata_value(&metadata, &["timezone", "time zone", "target timezone"]),
-        resume_version: metadata_value(&metadata, &["resume", "resume version", "cv"]),
+        resume_version,
+        resume_path,
+        resume_match,
     })
+}
+
+fn match_resume(resume_version: Option<&str>, interviewing_as: Option<&str>) -> (Option<String>, String) {
+    if let Some(value) = resume_version {
+        if let Some(path) = resolve_explicit_path(value) {
+            return (Some(path.to_string_lossy().into_owned()), "matched".to_string());
+        }
+    }
+
+    let candidates = resume_candidates();
+    let query = resume_version.or(interviewing_as);
+    let Some(query) = query else {
+        return (None, "unspecified".to_string());
+    };
+    let query = normalized(query);
+    if query.is_empty() {
+        return (None, "unspecified".to_string());
+    }
+
+    let mut ranked = candidates
+        .into_iter()
+        .filter_map(|path| {
+            let name = normalized(path.file_stem()?.to_str()?);
+            let score = resume_score(&query, &name);
+            (score > 0).then_some((score, path))
+        })
+        .collect::<Vec<_>>();
+    ranked.sort_by(|left, right| right.0.cmp(&left.0));
+
+    let Some((best_score, best_path)) = ranked.first() else {
+        return (None, "missing".to_string());
+    };
+    if *best_score < 60 {
+        return (None, "missing".to_string());
+    }
+    if ranked.get(1).is_some_and(|(score, _)| score == best_score) {
+        return (None, "ambiguous".to_string());
+    }
+    (
+        Some(best_path.to_string_lossy().into_owned()),
+        "matched".to_string(),
+    )
+}
+
+fn resolve_explicit_path(value: &str) -> Option<PathBuf> {
+    if value.starts_with("https://") || value.starts_with("http://") {
+        return Some(PathBuf::from(value));
+    }
+    let expanded = if let Some(relative) = value.strip_prefix("~/") {
+        std::env::var_os("HOME").map(PathBuf::from)?.join(relative)
+    } else {
+        PathBuf::from(value)
+    };
+    expanded.is_file().then_some(expanded)
+}
+
+fn resume_candidates() -> Vec<PathBuf> {
+    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+        return Vec::new();
+    };
+    let mut candidates = Vec::new();
+    for directory in ["Documents", "Desktop", "Downloads"] {
+        collect_resume_files(&home.join(directory), 0, &mut candidates);
+    }
+    candidates
+}
+
+fn collect_resume_files(directory: &Path, depth: usize, candidates: &mut Vec<PathBuf>) {
+    if depth > 4 || candidates.len() >= 200 {
+        return;
+    }
+    let Ok(entries) = fs::read_dir(directory) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_resume_files(&path, depth + 1, candidates);
+            continue;
+        }
+        let extension = path
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if !["pdf", "doc", "docx", "txt", "md"].contains(&extension.as_str()) {
+            continue;
+        }
+        let name = normalized(path.file_name().and_then(|value| value.to_str()).unwrap_or_default());
+        if name.contains("resume") || name.contains("résumé") || name.split_whitespace().any(|part| part == "cv") {
+            candidates.push(path);
+        }
+    }
+}
+
+fn resume_score(query: &str, candidate: &str) -> u16 {
+    if query == candidate {
+        return 100;
+    }
+    if candidate.contains(query) || query.contains(candidate) {
+        return 90;
+    }
+    let tokens = query
+        .split_whitespace()
+        .filter(|token| token.len() > 1 && !["resume", "résumé", "cv", "version"].contains(token))
+        .collect::<Vec<_>>();
+    if tokens.is_empty() {
+        return 0;
+    }
+    let matches = tokens.iter().filter(|token| candidate.contains(**token)).count();
+    ((matches * 80) / tokens.len()) as u16
+}
+
+fn normalized(value: &str) -> String {
+    value
+        .to_lowercase()
+        .chars()
+        .map(|character| if character.is_alphanumeric() { character } else { ' ' })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn role_from_title(title: &str) -> Option<String> {
@@ -106,6 +253,40 @@ fn role_from_title(title: &str) -> Option<String> {
     None
 }
 
+fn role_from_job_url(value: &str) -> Option<String> {
+    let slug = value
+        .split('?')
+        .next()?
+        .trim_end_matches('/')
+        .rsplit('/')
+        .nth(1)?;
+    let role = slug
+        .split('-')
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut characters = part.chars();
+            match characters.next() {
+                Some(first) => first.to_uppercase().collect::<String>() + characters.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    (!role.is_empty()).then_some(role)
+}
+
+fn attendees_from_title(title: &str) -> Vec<String> {
+    title
+        .split('@')
+        .next()
+        .unwrap_or_default()
+        .split('-')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
 fn contains_interview_term(value: &str) -> bool {
     let value = value.to_lowercase();
     ["interview", "recruiter screen", "technical screen", "hiring manager"]
@@ -114,12 +295,41 @@ fn contains_interview_term(value: &str) -> bool {
 }
 
 fn parse_metadata(notes: &str) -> Vec<(String, String)> {
-    notes
-        .lines()
-        .filter_map(|line| line.split_once(':'))
-        .map(|(key, value)| (key.trim().to_lowercase(), value.trim().to_string()))
-        .filter(|(_, value)| !value.is_empty())
-        .collect()
+    let lines = notes.lines().map(str::trim).collect::<Vec<_>>();
+    let known_keys = [
+        "as",
+        "interviewing as",
+        "role",
+        "timezone",
+        "time zone",
+        "target timezone",
+        "resume",
+        "resume version",
+        "cv",
+        "jd",
+        "job description",
+        "salary",
+    ];
+    let mut metadata = Vec::new();
+    for (index, line) in lines.iter().enumerate() {
+        if let Some((key, value)) = line.split_once(':') {
+            let key = key.trim().to_lowercase();
+            let value = value.trim();
+            if known_keys.contains(&key.as_str()) && !value.is_empty() {
+                metadata.push((key, value.to_string()));
+            }
+            continue;
+        }
+
+        let key = line.to_lowercase();
+        if !known_keys.contains(&key.as_str()) {
+            continue;
+        }
+        if let Some(value) = lines[index + 1..].iter().find(|value| !value.is_empty()) {
+            metadata.push((key, (*value).to_string()));
+        }
+    }
+    metadata
 }
 
 fn metadata_value(metadata: &[(String, String)], keys: &[&str]) -> Option<String> {

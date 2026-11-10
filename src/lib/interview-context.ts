@@ -8,6 +8,8 @@ export type InterviewContext = {
   interviewingAs?: string;
   targetTimeZone?: string;
   resumeVersion?: string;
+  resumePath?: string;
+  resumeMatch: "matched" | "missing" | "ambiguous" | "unspecified";
 };
 
 export function composeInterviewSystemPrompt(
@@ -27,6 +29,7 @@ export function composeInterviewSystemPrompt(
     context.resumeVersion
       ? `Resume version: ${context.resumeVersion}`
       : null,
+    context.resumePath ? `Matched resume file: ${context.resumePath}` : null,
     `Scheduled time: ${context.startsAt} to ${context.endsAt}`,
     context.attendees.length > 0
       ? `Participants: ${context.attendees.join(", ")}`
